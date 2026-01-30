@@ -55,6 +55,27 @@ export interface AnalysisResult {
   extractedMarkup: ExtractedMarkup
   hasFavicon: boolean
   hasOG: boolean
+  favicons: FaviconInfo[]
+  ogTags: OGTagInfo[]
+  typographyInfo: TypographyInfo[]
+}
+
+export interface FaviconInfo {
+  rel: string
+  href: string
+  sizes?: string
+  type?: string
+}
+
+export interface OGTagInfo {
+  property: string
+  content: string
+}
+
+export interface TypographyInfo {
+  className: string
+  tagName: string
+  text?: string
 }
 
 export interface ComponentCategories {

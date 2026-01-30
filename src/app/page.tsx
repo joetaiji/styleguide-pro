@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Upload, Settings, FileText, FolderOpen, Trash2, Download, Copy, Eye, Loader2, CheckCircle, X, Sparkles, LayoutGrid, Palette, Type, FileCode, BarChart3, Rocket, ClipboardList, HelpCircle } from 'lucide-react'
+import { Upload, Settings, FileText, FolderOpen, Trash2, Download, Copy, Eye, Loader2, CheckCircle, X, Sparkles, LayoutGrid, Palette, Type, FileCode, BarChart3, Rocket, ClipboardList, HelpCircle, Plus, Minus, Link, Globe } from 'lucide-react'
 import type { UploadedFile, AnalysisResult, SectionOptions, StyleOptions, ProjectInfo, TabType, AdditionalClasses } from '@/types'
 import { analyzeFiles } from '@/lib/analyzer'
 import { buildStyleGuide } from '@/lib/builder'
@@ -63,7 +63,11 @@ export default function Home() {
   const [sectionOptions, setSectionOptions] = useState<SectionOptions>(defaultSectionOptions)
   const [styleOptions, setStyleOptions] = useState<StyleOptions>(defaultStyleOptions)
   const [additionalClasses, setAdditionalClasses] = useState<AdditionalClasses>(defaultAdditionalClasses)
+  const [showExtraInput, setShowExtraInput] = useState<{ [key: string]: boolean }>({})
   const [projectInfo, setProjectInfo] = useState<ProjectInfo>({ name: 'UI Style Guide', version: '1.0.0' })
+  const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null)
+  const [urlInput, setUrlInput] = useState('')
+  const [isUrlLoading, setIsUrlLoading] = useState(false)
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type })
@@ -89,11 +93,11 @@ export default function Home() {
 
       if (ext === 'zip') {
         await handleZipFile(file, newFiles)
-      } else if (['html', 'htm', 'css', 'js'].includes(ext)) {
+      } else if (['html', 'htm', 'jsp', 'css', 'js'].includes(ext)) {
         const content = await file.text()
         newFiles.push({
           name: file.name,
-          type: ext === 'htm' ? 'html' : ext as 'html' | 'css' | 'js',
+          type: (ext === 'htm' || ext === 'jsp') ? 'html' : ext as 'html' | 'css' | 'js',
           size: file.size,
           content,
         })
@@ -117,11 +121,11 @@ export default function Home() {
 
         const ext = relativePath.split('.').pop()?.toLowerCase() || ''
 
-        if (['html', 'htm', 'css', 'js'].includes(ext)) {
+        if (['html', 'htm', 'jsp', 'css', 'js'].includes(ext)) {
           const content = await zipEntry.async('string')
           newFiles.push({
             name: relativePath,
-            type: ext === 'htm' ? 'html' : ext as 'html' | 'css' | 'js',
+            type: (ext === 'htm' || ext === 'jsp') ? 'html' : ext as 'html' | 'css' | 'js',
             size: content.length,
             content,
             fromZip: zipFileName,
@@ -228,6 +232,91 @@ export default function Home() {
       case 'js': return 'bg-yellow-400 text-black'
       case 'image': return 'bg-gray-600'
       default: return 'bg-gray-400'
+    }
+  }
+
+  const handleUrlFetch = async () => {
+    if (!urlInput.trim()) {
+      showToast('URL을 입력해주세요.', 'error')
+      return
+    }
+
+    setIsUrlLoading(true)
+    try {
+      const response = await fetch('/api/fetch-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlInput.trim() }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'URL을 가져올 수 없습니다.')
+      }
+
+      const newFiles: UploadedFile[] = []
+
+      // HTML 파일들 추가 (배열 형태)
+      if (data.html && Array.isArray(data.html)) {
+        data.html.forEach((page: { url: string; content: string }, index: number) => {
+          const urlObj = new URL(page.url)
+          let htmlFileName = urlObj.pathname.split('/').pop() || 'index.html'
+          // 파일명이 없거나 확장자가 없으면 index.html로
+          if (!htmlFileName || !htmlFileName.includes('.')) {
+            htmlFileName = index === 0 ? 'index.html' : `page-${index + 1}.html`
+          }
+          newFiles.push({
+            name: htmlFileName,
+            type: 'html',
+            size: page.content.length,
+            content: page.content,
+            fromZip: urlObj.host,
+          })
+        })
+      }
+
+      // CSS 파일들 추가
+      if (data.css && data.css.length > 0) {
+        data.css.forEach((css: { url: string; content: string }) => {
+          const cssFileName = css.url.split('/').pop() || 'style.css'
+          newFiles.push({
+            name: cssFileName,
+            type: 'css',
+            size: css.content.length,
+            content: css.content,
+            fromZip: new URL(css.url).host,
+          })
+        })
+      }
+
+      if (newFiles.length > 0) {
+        setFiles((prev) => [...prev, ...newFiles])
+        const htmlCount = data.html?.length || 0
+        const cssCount = data.css?.length || 0
+        showToast(`HTML ${htmlCount}개, CSS ${cssCount}개 파일을 가져왔습니다.`, 'success')
+        setUrlInput('')
+      } else {
+        showToast('가져올 파일이 없습니다.', 'error')
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'URL을 가져오는 중 오류가 발생했습니다.', 'error')
+    } finally {
+      setIsUrlLoading(false)
+    }
+  }
+
+  const handleFileDoubleClick = (file: UploadedFile) => {
+    if (file.type === 'html' || file.type === 'css' || file.type === 'js') {
+      // HTML/CSS/JS 파일은 모달로 코드 보기
+      setPreviewFile(file)
+    } else if (file.type === 'image') {
+      // 이미지는 새 탭에서 보기
+      const newWindow = window.open('', '_blank')
+      if (newWindow) {
+        newWindow.document.write(`<html><head><title>${file.name}</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#1a1a1a;}</style></head><body><img src="${file.content}" alt="${file.name}" style="max-width:100%;max-height:100vh;"/></body></html>`)
+        newWindow.document.close()
+      }
     }
   }
 
@@ -396,8 +485,7 @@ export default function Home() {
               {/* 포함할 섹션 */}
               <div className="mb-6">
                 <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><LayoutGrid size={14} /> 포함할 섹션</h3>
-                <p className="text-xs text-gray-500 mb-3">추가 클래스: 쉼표로 구분하여 입력 (예: .btn-lg, .btn-sm)</p>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {[
                     { key: 'colors', label: '컬러 팔레트', hasInput: false },
                     { key: 'typography', label: '타이포그래피', hasInput: true },
@@ -414,22 +502,35 @@ export default function Home() {
                     { key: 'accordion', label: '아코디언', hasInput: true },
                   ].map(({ key, label, hasInput }) => (
                     <div key={key} className="space-y-1">
-                      <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1.5 rounded">
-                        <input
-                          type="checkbox"
-                          checked={sectionOptions[key as keyof SectionOptions]}
-                          onChange={(e) => setSectionOptions({ ...sectionOptions, [key]: e.target.checked })}
-                          className="w-4 h-4 accent-krds-primary"
-                        />
-                        <span className="text-sm text-gray-700">{label}</span>
-                      </label>
-                      {hasInput && sectionOptions[key as keyof SectionOptions] && (
+                      <div className="flex items-center justify-between hover:bg-gray-50 p-1.5 rounded">
+                        <label className="flex items-center gap-2 cursor-pointer flex-1">
+                          <input
+                            type="checkbox"
+                            checked={sectionOptions[key as keyof SectionOptions]}
+                            onChange={(e) => setSectionOptions({ ...sectionOptions, [key]: e.target.checked })}
+                            className="w-4 h-4 accent-krds-primary"
+                          />
+                          <span className="text-sm text-gray-700">{label}</span>
+                        </label>
+                        {hasInput && sectionOptions[key as keyof SectionOptions] && (
+                          <button
+                            type="button"
+                            onClick={() => setShowExtraInput({ ...showExtraInput, [key]: !showExtraInput[key] })}
+                            className={`p-1 rounded transition-colors ${showExtraInput[key] ? 'bg-krds-primary text-white' : 'text-gray-400 hover:text-krds-primary hover:bg-gray-100'}`}
+                            title={showExtraInput[key] ? '입력창 닫기' : '추가 키워드 입력'}
+                          >
+                            {showExtraInput[key] ? <Minus size={14} /> : <Plus size={14} />}
+                          </button>
+                        )}
+                      </div>
+                      {hasInput && sectionOptions[key as keyof SectionOptions] && showExtraInput[key] && (
                         <input
                           type="text"
-                          placeholder="추가 클래스명..."
+                          placeholder="키워드 입력 (쉼표로 구분, 예: btn, card)"
                           value={additionalClasses[key as keyof AdditionalClasses]}
                           onChange={(e) => setAdditionalClasses({ ...additionalClasses, [key]: e.target.value })}
-                          className="w-full ml-6 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-krds-primary"
+                          className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:border-krds-primary"
+                          autoFocus
                         />
                       )}
                     </div>
@@ -516,7 +617,7 @@ export default function Home() {
             <div className="flex-1 panel min-h-[calc(100vh-64px)]">
               <div className="panel-header">
                 <h2 className="text-xl font-bold text-gray-900">파일 업로드</h2>
-                <p className="text-sm text-gray-500 mt-1">분석할 HTML, CSS, JS 파일을 업로드하거나 ZIP 파일을 선택하세요</p>
+                <p className="text-sm text-gray-500 mt-1">분석할 HTML, JSP, CSS, JS 파일을 업로드하거나 ZIP 파일을 선택하세요</p>
               </div>
               <div className="panel-body">
               {/* 드롭존 */}
@@ -528,7 +629,7 @@ export default function Home() {
               >
                 <div className="mb-4 flex justify-center"><FolderOpen size={56} className="text-gray-400" /></div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">파일을 드래그하여 업로드하세요</h3>
-                <p className="text-sm text-gray-500 mb-5">HTML, CSS, JS 파일 또는 ZIP 압축파일을 지원합니다</p>
+                <p className="text-sm text-gray-500 mb-5">HTML, JSP, CSS, JS 파일 또는 ZIP 압축파일을 지원합니다</p>
                 <button className="btn btn-primary">
                   <FolderOpen size={18} />
                   파일 선택
@@ -538,9 +639,50 @@ export default function Home() {
                   id="fileInput"
                   className="hidden"
                   multiple
-                  accept=".html,.htm,.css,.js,.zip"
+                  accept=".html,.htm,.jsp,.css,.js,.zip"
                   onChange={handleFileInput}
                 />
+              </div>
+
+              {/* URL 입력 */}
+              <div className="mt-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex-1 h-px bg-gray-200"></div>
+                  <span className="text-sm text-gray-400 font-medium">또는 URL 입력</span>
+                  <div className="flex-1 h-px bg-gray-200"></div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1 relative">
+                    <Globe size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="url"
+                      value={urlInput}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleUrlFetch()}
+                      placeholder="https://example.com"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-krds-primary focus:ring-1 focus:ring-krds-primary"
+                      disabled={isUrlLoading}
+                    />
+                  </div>
+                  <button
+                    onClick={handleUrlFetch}
+                    disabled={isUrlLoading || !urlInput.trim()}
+                    className="btn btn-primary px-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isUrlLoading ? (
+                      <>
+                        <Loader2 size={18} className="animate-spin" />
+                        가져오는 중...
+                      </>
+                    ) : (
+                      <>
+                        <Link size={18} />
+                        URL 추출
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">웹사이트 URL을 입력하면 메인 페이지와 서브페이지의 HTML, CSS 파일을 자동으로 추출합니다.</p>
               </div>
 
               {/* 파일 목록 */}
@@ -561,7 +703,7 @@ export default function Home() {
                         {showFileTip && (
                           <div className="absolute left-0 top-full mt-2 z-50 w-64 p-3 bg-gray-800 text-white text-xs rounded-lg shadow-lg">
                             <div className="flex justify-between items-start gap-2">
-                              <p>불필요하거나 중복된 파일을 제거하면 더 좋은 결과를 얻을 수 있습니다.</p>
+                              <p>파일을 더블클릭하면 소스코드를 볼 수 있습니다.</p>
                               <button onClick={() => setShowFileTip(false)} className="text-gray-400 hover:text-white flex-shrink-0">
                                 <X size={14} />
                               </button>
@@ -578,7 +720,12 @@ export default function Home() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto pr-2">
                     {files.map((file, index) => (
-                      <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-krds-primary transition-colors">
+                      <div 
+                        key={index} 
+                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-krds-primary transition-colors cursor-pointer"
+                        onDoubleClick={() => handleFileDoubleClick(file)}
+                        title="더블클릭하여 미리보기"
+                      >
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-xs ${getFileIconColor(file.type)}`}>
                           {file.type === 'image' ? 'IMG' : file.type.toUpperCase()}
                         </div>
@@ -589,7 +736,7 @@ export default function Home() {
                             {file.fromZip && <span>📦 {file.fromZip}</span>}
                           </div>
                         </div>
-                        <button onClick={() => removeFile(index)} className="text-gray-400 hover:text-red-500 p-1">
+                        <button onClick={(e) => { e.stopPropagation(); removeFile(index); }} className="text-gray-400 hover:text-red-500 p-1">
                           <X size={18} />
                         </button>
                       </div>
@@ -691,16 +838,52 @@ export default function Home() {
         )}
       </main>
 
+      {/* 파일 미리보기 모달 */}
+      {previewFile && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setPreviewFile(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-[90vw] max-w-4xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs ${getFileIconColor(previewFile.type)}`}>
+                  {previewFile.type.toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">{previewFile.name}</h3>
+                  <p className="text-xs text-gray-500">{formatFileSize(previewFile.size)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(previewFile.content)
+                    showToast('코드가 복사되었습니다', 'info')
+                  }}
+                  className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  복사
+                </button>
+                <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-gray-900">
+              <pre className="text-sm text-gray-100 font-mono whitespace-pre-wrap">{previewFile.content}</pre>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 토스트 */}
       {toast && (
         <div
           className={`fixed bottom-6 right-6 px-6 py-4 rounded-lg shadow-lg text-white flex items-center gap-3 animate-in slide-in-from-bottom-4 ${
-            toast.type === 'success' ? 'bg-krds-success' :
+            toast.type === 'success' ? 'bg-gray-600' :
             toast.type === 'error' ? 'bg-krds-danger' :
             'bg-gray-600'
           }`}
         >
-          {toast.type === 'success' && <CheckCircle size={20} />}
+          {toast.type === 'success' && <CheckCircle size={20} className="text-gray-300" />}
           {toast.message}
         </div>
       )}
