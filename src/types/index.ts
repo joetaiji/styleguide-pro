@@ -53,6 +53,8 @@ export interface AnalysisResult {
   icons: Set<string>
   components: ComponentCategories
   extractedMarkup: ExtractedMarkup
+  hasFavicon: boolean
+  hasOG: boolean
 }
 
 export interface ComponentCategories {
@@ -84,6 +86,22 @@ export interface SectionOptions {
   accordion: boolean
   colors: boolean
   favicon: boolean
+}
+
+// 각 섹션에 수동으로 추가할 클래스명
+export interface AdditionalClasses {
+  colors: string
+  typography: string
+  icons: string
+  badge: string
+  lists: string
+  tables: string
+  buttons: string
+  forms: string
+  boxes: string
+  modal: string
+  pagination: string
+  accordion: string
 }
 
 export interface StyleOptions {

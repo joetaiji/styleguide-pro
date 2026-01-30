@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { Upload, Settings, FileText, FolderOpen, Trash2, Download, Copy, Eye, Loader2, CheckCircle, X, Sparkles, LayoutGrid, Palette, Type, FileCode, BarChart3, Rocket, ClipboardList, HelpCircle } from 'lucide-react'
-import type { UploadedFile, AnalysisResult, SectionOptions, StyleOptions, ProjectInfo, TabType } from '@/types'
+import type { UploadedFile, AnalysisResult, SectionOptions, StyleOptions, ProjectInfo, TabType, AdditionalClasses } from '@/types'
 import { analyzeFiles } from '@/lib/analyzer'
 import { buildStyleGuide } from '@/lib/builder'
 import { storeImage, clearImageStore, imageMimeTypes } from '@/lib/imageStore'
@@ -33,6 +33,21 @@ const defaultStyleOptions: StyleOptions = {
   fontFamily: 'pretendard',
 }
 
+const defaultAdditionalClasses: AdditionalClasses = {
+  colors: '',
+  typography: '',
+  icons: '',
+  badge: '',
+  lists: '',
+  tables: '',
+  buttons: '',
+  forms: '',
+  boxes: '',
+  modal: '',
+  pagination: '',
+  accordion: '',
+}
+
 export default function Home() {
   const [showIntro, setShowIntro] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('upload')
@@ -47,6 +62,7 @@ export default function Home() {
 
   const [sectionOptions, setSectionOptions] = useState<SectionOptions>(defaultSectionOptions)
   const [styleOptions, setStyleOptions] = useState<StyleOptions>(defaultStyleOptions)
+  const [additionalClasses, setAdditionalClasses] = useState<AdditionalClasses>(defaultAdditionalClasses)
   const [projectInfo, setProjectInfo] = useState<ProjectInfo>({ name: 'UI Style Guide', version: '1.0.0' })
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -169,7 +185,7 @@ export default function Home() {
     setProgress(100)
 
     const result = analysisResult || analyzeFiles(files)
-    const html = buildStyleGuide(files, result, sectionOptions, styleOptions, projectInfo)
+    const html = buildStyleGuide(files, result, sectionOptions, styleOptions, projectInfo, additionalClasses)
     setGeneratedHTML(html)
 
     setTimeout(() => {
@@ -380,31 +396,43 @@ export default function Home() {
               {/* 포함할 섹션 */}
               <div className="mb-6">
                 <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><LayoutGrid size={14} /> 포함할 섹션</h3>
-                <div className="space-y-2">
+                <p className="text-xs text-gray-500 mb-3">추가 클래스: 쉼표로 구분하여 입력 (예: .btn-lg, .btn-sm)</p>
+                <div className="space-y-3">
                   {[
-                    { key: 'colors', label: '컬러 팔레트' },
-                    { key: 'typography', label: '타이포그래피' },
-                    { key: 'icons', label: '아이콘' },
-                    { key: 'badge', label: '배지' },
-                    { key: 'lists', label: '리스트' },
-                    { key: 'tables', label: '테이블' },
-                    { key: 'buttons', label: '버튼' },
-                    { key: 'forms', label: '폼 요소' },
-                    { key: 'favicon', label: '파비콘/OG' },
-                    { key: 'boxes', label: '박스/카드' },
-                    { key: 'modal', label: '모달' },
-                    { key: 'pagination', label: '페이지네이션' },
-                    { key: 'accordion', label: '아코디언' },
-                  ].map(({ key, label }) => (
-                    <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1.5 rounded">
-                      <input
-                        type="checkbox"
-                        checked={sectionOptions[key as keyof SectionOptions]}
-                        onChange={(e) => setSectionOptions({ ...sectionOptions, [key]: e.target.checked })}
-                        className="w-4 h-4 accent-krds-primary"
-                      />
-                      <span className="text-sm text-gray-700">{label}</span>
-                    </label>
+                    { key: 'colors', label: '컬러 팔레트', hasInput: false },
+                    { key: 'typography', label: '타이포그래피', hasInput: true },
+                    { key: 'icons', label: '아이콘', hasInput: false },
+                    { key: 'badge', label: '배지', hasInput: true },
+                    { key: 'lists', label: '리스트', hasInput: true },
+                    { key: 'tables', label: '테이블', hasInput: true },
+                    { key: 'buttons', label: '버튼', hasInput: true },
+                    { key: 'forms', label: '폼 요소', hasInput: true },
+                    { key: 'favicon', label: '파비콘/OG', hasInput: false },
+                    { key: 'boxes', label: '박스/카드', hasInput: true },
+                    { key: 'modal', label: '모달', hasInput: true },
+                    { key: 'pagination', label: '페이지네이션', hasInput: true },
+                    { key: 'accordion', label: '아코디언', hasInput: true },
+                  ].map(({ key, label, hasInput }) => (
+                    <div key={key} className="space-y-1">
+                      <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1.5 rounded">
+                        <input
+                          type="checkbox"
+                          checked={sectionOptions[key as keyof SectionOptions]}
+                          onChange={(e) => setSectionOptions({ ...sectionOptions, [key]: e.target.checked })}
+                          className="w-4 h-4 accent-krds-primary"
+                        />
+                        <span className="text-sm text-gray-700">{label}</span>
+                      </label>
+                      {hasInput && sectionOptions[key as keyof SectionOptions] && (
+                        <input
+                          type="text"
+                          placeholder="추가 클래스명..."
+                          value={additionalClasses[key as keyof AdditionalClasses]}
+                          onChange={(e) => setAdditionalClasses({ ...additionalClasses, [key]: e.target.value })}
+                          className="w-full ml-6 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-krds-primary"
+                        />
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>

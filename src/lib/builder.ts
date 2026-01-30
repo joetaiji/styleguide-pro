@@ -1,4 +1,4 @@
-import type { AnalysisResult, SectionOptions, StyleOptions, ProjectInfo, UploadedFile } from '@/types'
+import type { AnalysisResult, SectionOptions, StyleOptions, ProjectInfo, UploadedFile, AdditionalClasses } from '@/types'
 import { replaceImagePaths } from './imageStore'
 
 function escapeHtml(text: string): string {
@@ -29,7 +29,7 @@ interface SectionBuilder {
   check: () => boolean
   id: string
   title: string
-  build: (id: number, includeCode: boolean) => string
+  build: (id: number, includeCode: boolean, extraClasses?: string) => string
 }
 
 export function buildStyleGuide(
@@ -37,7 +37,8 @@ export function buildStyleGuide(
   analysisResult: AnalysisResult,
   sectionOptions: SectionOptions,
   styleOptions: StyleOptions,
-  projectInfo: ProjectInfo
+  projectInfo: ProjectInfo,
+  additionalClasses?: AdditionalClasses
 ): string {
   const { name: projectName, version: projectVersion } = projectInfo
   const { toc: includeTOC, codeblock: includeCodeBlock, fontFamily } = styleOptions
@@ -77,6 +78,12 @@ export function buildStyleGuide(
   const tocItems: { id: string; title: string }[] = []
   let sectionId = 0
 
+  // 추가 클래스 파싱 함수
+  const parseAdditionalClasses = (input: string): string[] => {
+    if (!input) return []
+    return input.split(',').map(c => c.trim().replace(/^\./, '')).filter(c => c.length > 0)
+  }
+
   const builders: SectionBuilder[] = [
     // 1. 컬러
     {
@@ -87,10 +94,10 @@ export function buildStyleGuide(
     },
     // 2. 타이포그래피
     {
-      check: () => sectionOptions.typography && analysisResult.components.typography.length > 0,
+      check: () => sectionOptions.typography && (analysisResult.components.typography.length > 0 || (additionalClasses?.typography || '').length > 0),
       id: 'typography',
       title: '타이포그래피',
-      build: (id, code) => buildTypographySection(id, code, analysisResult),
+      build: (id, code, extra) => buildTypographySection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
     // 3. 아이콘
     {
@@ -103,17 +110,17 @@ export function buildStyleGuide(
     {
       check: () =>
         sectionOptions.badge &&
-        (analysisResult.components.badges.length > 0 || analysisResult.extractedMarkup.badges.length > 0),
+        (analysisResult.components.badges.length > 0 || analysisResult.extractedMarkup.badges.length > 0 || (additionalClasses?.badge || '').length > 0),
       id: 'badges',
       title: '배지',
-      build: (id, code) => buildBadgeSection(id, code, analysisResult),
+      build: (id, code, extra) => buildBadgeSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
     // 5. 리스트
     {
-      check: () => sectionOptions.lists && analysisResult.components.lists.length > 0,
+      check: () => sectionOptions.lists && (analysisResult.components.lists.length > 0 || (additionalClasses?.lists || '').length > 0),
       id: 'lists',
       title: '리스트',
-      build: (id, code) => buildListSection(id, code, analysisResult),
+      build: (id, code, extra) => buildListSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
     // 6. 탭
     {
@@ -124,67 +131,81 @@ export function buildStyleGuide(
     },
     // 7. 테이블
     {
-      check: () => sectionOptions.tables && analysisResult.tables.length > 0,
+      check: () => sectionOptions.tables && (analysisResult.tables.length > 0 || (additionalClasses?.tables || '').length > 0),
       id: 'tables',
       title: '테이블',
-      build: (id, code) => buildTableSection(id, code, analysisResult),
+      build: (id, code, extra) => buildTableSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
     // 8. 버튼
     {
-      check: () => sectionOptions.buttons && analysisResult.components.buttons.length > 0,
+      check: () => sectionOptions.buttons && (analysisResult.components.buttons.length > 0 || (additionalClasses?.buttons || '').length > 0),
       id: 'buttons',
       title: '버튼',
-      build: (id, code) => buildButtonSection(id, code, analysisResult),
+      build: (id, code, extra) => buildButtonSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
     // 9. 폼
     {
-      check: () => sectionOptions.forms && analysisResult.components.forms.length > 0,
+      check: () => sectionOptions.forms && (analysisResult.components.forms.length > 0 || (additionalClasses?.forms || '').length > 0),
       id: 'forms',
       title: '폼 요소',
-      build: (id, code) => buildFormSection(id, code, analysisResult),
+      build: (id, code, extra) => buildFormSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
-    // 10. 파비콘과 OG
+    // 10. 파비콘과 OG (HTML에 파비콘 또는 OG 메타태그가 있을 때만 표시)
     {
-      check: () => sectionOptions.favicon,
+      check: () => sectionOptions.favicon && (analysisResult.hasFavicon || analysisResult.hasOG),
       id: 'favicon',
       title: '파비콘과 OG',
-      build: (id) => buildFaviconSection(id),
+      build: (id) => buildFaviconSection(id, analysisResult),
     },
     // 기타 섹션들
     {
-      check: () => sectionOptions.boxes && analysisResult.components.boxes.length > 0,
+      check: () => sectionOptions.boxes && (analysisResult.components.boxes.length > 0 || (additionalClasses?.boxes || '').length > 0),
       id: 'boxes',
       title: '박스/카드',
-      build: (id, code) => buildBoxSection(id, code, analysisResult),
+      build: (id, code, extra) => buildBoxSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
     {
-      check: () => sectionOptions.modal && analysisResult.modals.length > 0,
+      check: () => sectionOptions.modal && (analysisResult.modals.length > 0 || (additionalClasses?.modal || '').length > 0),
       id: 'modal',
       title: '모달',
-      build: (id, code) => buildModalSection(id, code, analysisResult),
+      build: (id, code, extra) => buildModalSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
     {
-      check: () => sectionOptions.pagination && analysisResult.components.pagination.length > 0,
+      check: () => sectionOptions.pagination && (analysisResult.components.pagination.length > 0 || (additionalClasses?.pagination || '').length > 0),
       id: 'pagination',
       title: '페이지네이션',
-      build: (id, code) => buildPaginationSection(id, code, analysisResult),
+      build: (id, code, extra) => buildPaginationSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
     {
       check: () =>
         sectionOptions.accordion &&
         (analysisResult.components.accordions.length > 0 ||
-          analysisResult.extractedMarkup.accordions.length > 0),
+          analysisResult.extractedMarkup.accordions.length > 0 || (additionalClasses?.accordion || '').length > 0),
       id: 'accordions',
       title: '아코디언',
-      build: (id, code) => buildAccordionSection(id, code, analysisResult),
+      build: (id, code, extra) => buildAccordionSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
   ]
+
+  // 섹션별 추가 클래스 매핑
+  const sectionExtraClasses: { [key: string]: string } = {
+    typography: additionalClasses?.typography || '',
+    badges: additionalClasses?.badge || '',
+    lists: additionalClasses?.lists || '',
+    tables: additionalClasses?.tables || '',
+    buttons: additionalClasses?.buttons || '',
+    forms: additionalClasses?.forms || '',
+    boxes: additionalClasses?.boxes || '',
+    modal: additionalClasses?.modal || '',
+    pagination: additionalClasses?.pagination || '',
+    accordions: additionalClasses?.accordion || '',
+  }
 
   builders.forEach((builder) => {
     if (builder.check()) {
       sectionId++
       tocItems.push({ id: builder.id, title: builder.title })
-      sections.push(builder.build(sectionId, includeCodeBlock))
+      sections.push(builder.build(sectionId, includeCodeBlock, sectionExtraClasses[builder.id]))
     }
   })
 
@@ -278,42 +299,47 @@ ${sections.join('\n\n')}
 }
 
 // 섹션 빌더들
-function buildButtonSection(id: number, includeCode: boolean, result: AnalysisResult): string {
-  const buttonClasses = [...new Set(result.components.buttons)].slice(0, 20)
+function buildButtonSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
+  const buttonClasses = [...new Set([...result.components.buttons, ...extraClasses])].slice(0, 20)
   const extracted = result.extractedMarkup.buttons.slice(0, 10)
+  
+  // 추가 클래스에 대한 프리뷰 버튼 생성
+  const extraButtons = extraClasses.map(cls => `<button class="${cls}">버튼 (.${cls})</button>`).join('\n')
+  
   const previewHtml =
     extracted.length > 0
-      ? extracted.map((btn) => btn.html).join('\n')
+      ? extracted.map((btn) => btn.html).join('\n') + (extraButtons ? '\n' + extraButtons : '')
       : buttonClasses.slice(0, 5).map((cls) => `<button class="${cls}">버튼</button>`).join('\n')
   const codeHtml =
     extracted.length > 0
-      ? extracted.map((btn) => btn.html).join('\n\n')
+      ? extracted.map((btn) => btn.html).join('\n\n') + (extraButtons ? '\n\n<!-- 추가 클래스 -->\n' + extraButtons : '')
       : buttonClasses.map((cls) => `<button class="${cls}">버튼</button>`).join('\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
   const classListHtml = buttonClasses.length > 0 ? `<p class="sg-section-class">${buttonClasses.map(c => `.${c}`).join(', ')}</p>` : ''
   return `<section class="sg-section" id="buttons"><h2 class="sg-title">${id}. 버튼</h2>${classListHtml}<div class="sg-preview sg-button-grid">${previewHtml}</div>${codeBlock}</section>`
 }
 
-function buildFormSection(id: number, includeCode: boolean, result: AnalysisResult): string {
-  const formClasses = [...new Set(result.components.forms)].slice(0, 20)
+function buildFormSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
+  const formClasses = [...new Set([...result.components.forms, ...extraClasses])].slice(0, 20)
   const seenClasses = new Set<string>()
   const extracted = result.extractedMarkup.forms.filter((f) => {
     if (seenClasses.has(f.classes)) return false
     seenClasses.add(f.classes)
     return true
   }).slice(0, 5)
+  const extraFormsHtml = extraClasses.map(cls => `<div class="sg-extracted-item"><div class="${cls}">폼 요소 (.${cls})</div></div>`).join('')
   const previewHtml =
     extracted.length > 0
-      ? extracted.map((f) => `<div class="sg-extracted-item">${f.html}</div>`).join('')
-      : ''
+      ? extracted.map((f) => `<div class="sg-extracted-item">${f.html}</div>`).join('') + extraFormsHtml
+      : extraFormsHtml
   const codeHtml = extracted.map((f) => f.html).join('\n\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
   const classListHtml = formClasses.length > 0 ? `<p class="sg-section-class">${formClasses.map(c => `.${c}`).join(', ')}</p>` : ''
   return `<section class="sg-section" id="forms"><h2 class="sg-title">${id}. 폼 요소</h2>${classListHtml}<div class="sg-preview">${previewHtml}</div>${codeBlock}</section>`
 }
 
-function buildTypographySection(id: number, includeCode: boolean, result: AnalysisResult): string {
-  const typoClasses = [...new Set(result.components.typography)].slice(0, 15)
+function buildTypographySection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
+  const typoClasses = [...new Set([...result.components.typography, ...extraClasses])].slice(0, 15)
   
   // 클래스별로 적절한 태그 생성
   const headingExamples = typoClasses.map((cls) => {
@@ -592,7 +618,7 @@ function buildAccordionSection(id: number, includeCode: boolean, result: Analysi
   return `<section class="sg-section" id="accordions"><h2 class="sg-title">${id}. 아코디언</h2>${classListHtml}<div class="sg-preview">${previewHtml}</div>${codeBlock}</section>`
 }
 
-function buildFaviconSection(id: number): string {
+function buildFaviconSection(id: number, result: AnalysisResult): string {
   return `<section class="sg-section" id="favicon">
     <h2 class="sg-title">${id}. 파비콘과 OG</h2>
     <p class="sg-desc">웹사이트의 파비콘과 Open Graph 메타태그 가이드</p>

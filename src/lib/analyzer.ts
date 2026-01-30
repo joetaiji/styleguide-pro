@@ -60,6 +60,8 @@ export function analyzeFiles(files: UploadedFile[]): AnalysisResult {
       badges: [],
       accordions: [],
     },
+    hasFavicon: false,
+    hasOG: false,
   }
 
   // HTML 분석
@@ -78,6 +80,14 @@ export function analyzeFiles(files: UploadedFile[]): AnalysisResult {
       })
       doc.querySelectorAll('[id]').forEach((el) => result.ids.add(el.id))
       doc.querySelectorAll('*').forEach((el) => result.tags.add(el.tagName.toLowerCase()))
+
+      // 파비콘 감지
+      const faviconLink = doc.querySelector('link[rel*="icon"]')
+      if (faviconLink) result.hasFavicon = true
+
+      // OG 메타태그 감지
+      const ogMeta = doc.querySelector('meta[property^="og:"]')
+      if (ogMeta) result.hasOG = true
 
       // 컴포넌트 추출
       extractComponents(doc, result)
