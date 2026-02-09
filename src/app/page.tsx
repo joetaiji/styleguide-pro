@@ -487,7 +487,7 @@ export default function Home() {
               {/* 포함할 섹션 */}
               <div className="mb-6">
                 <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5"><LayoutGrid size={14} /> 포함할 섹션</h3>
-                <div className="space-y-2">
+                <div className="section-list space-y-2">
                   {[
                     { key: 'colors', label: '컬러 팔레트', hasInput: false },
                     { key: 'typography', label: '타이포그래피', hasInput: true },

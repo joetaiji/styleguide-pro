@@ -63,6 +63,11 @@
   }
 }
 
+/* 포함할 섹션 space-y-2 오버라이드 */
+.section-list.space-y-2 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0;
+}
+
 /* 커스텀 스크롤바 */
 ::-webkit-scrollbar {
   width: 8px;
