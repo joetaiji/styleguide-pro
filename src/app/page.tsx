@@ -16,6 +16,7 @@ const defaultSectionOptions: SectionOptions = {
   tables: true,
   boxes: true,
   lists: true,
+  tabs: true,
   modal: true,
   icons: true,
   pagination: true,
@@ -39,6 +40,7 @@ const defaultAdditionalClasses: AdditionalClasses = {
   icons: '',
   badge: '',
   lists: '',
+  tabs: '',
   tables: '',
   buttons: '',
   forms: '',
@@ -492,14 +494,15 @@ export default function Home() {
                     { key: 'icons', label: '아이콘', hasInput: false },
                     { key: 'badge', label: '배지', hasInput: true },
                     { key: 'lists', label: '리스트', hasInput: true },
+                    { key: 'tabs', label: '탭', hasInput: true },
                     { key: 'tables', label: '테이블', hasInput: true },
                     { key: 'buttons', label: '버튼', hasInput: true },
                     { key: 'forms', label: '폼 요소', hasInput: true },
-                    { key: 'favicon', label: '파비콘/OG', hasInput: false },
                     { key: 'boxes', label: '박스/카드', hasInput: true },
                     { key: 'modal', label: '모달', hasInput: true },
                     { key: 'pagination', label: '페이지네이션', hasInput: true },
                     { key: 'accordion', label: '아코디언', hasInput: true },
+                    { key: 'favicon', label: '파비콘/OG', hasInput: false },
                   ].map(({ key, label, hasInput }) => (
                     <div key={key} className="space-y-1">
                       <div className="flex items-center justify-between hover:bg-gray-50 p-1.5 rounded">

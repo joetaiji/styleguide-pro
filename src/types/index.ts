@@ -28,6 +28,7 @@ export interface ComponentMarkup {
   classes: string
   html: string
   text?: string
+  count?: number
 }
 
 export interface CSSVariable {
@@ -76,6 +77,7 @@ export interface TypographyInfo {
   className: string
   tagName: string
   text?: string
+  count?: number
 }
 
 export interface ComponentCategories {
@@ -100,6 +102,7 @@ export interface SectionOptions {
   tables: boolean
   boxes: boolean
   lists: boolean
+  tabs: boolean
   modal: boolean
   icons: boolean
   pagination: boolean
@@ -116,6 +119,7 @@ export interface AdditionalClasses {
   icons: string
   badge: string
   lists: string
+  tabs: string
   tables: string
   buttons: string
   forms: string

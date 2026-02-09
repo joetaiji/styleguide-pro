@@ -8,6 +8,9 @@ function cleanMarkup(html: string): string {
     /\s(onclick|onload|onerror|onmouseover|onmouseout|onfocus|onblur)="[^"]*"/gi,
     ''
   )
+  // href 링크를 #으로 처리
+  html = html.replace(/href="[^"]*"/gi, 'href="#"')
+  html = html.replace(/href='[^']*'/gi, "href='#'")
   html = replaceImagePaths(html)
   html = html.replace(/\s+/g, ' ')
   html = html.replace(/>\s+</g, '>\n<')
@@ -140,27 +143,18 @@ export function analyzeFiles(files: UploadedFile[]): AnalysisResult {
         
         // 중복 체크
         if (!result.cssVariables.find((v) => v.name === name)) {
-          // 카테고리 분류
+          // 카테고리 분류 - 컬러는 #으로 시작하는 HEX 값만
           let category: CSSVariable['category'] = 'other'
-          if (
-            value.startsWith('#') ||
-            value.startsWith('rgb') ||
-            value.startsWith('hsl') ||
-            name.includes('color') ||
-            name.includes('primary') ||
-            name.includes('secondary') ||
-            name.includes('gray') ||
-            name.includes('point') ||
-            name.includes('danger') ||
-            name.includes('warning') ||
-            name.includes('success') ||
-            name.includes('info') ||
-            name.includes('bg') ||
-            name.includes('border') ||
-            name.includes('black') ||
-            name.includes('white')
-          ) {
+          
+          if (value.startsWith('#') || value.startsWith('rgb') || value.startsWith('hsl')) {
+            // HEX, rgb(), hsl() 색상 값만 color로 분류
             category = 'color'
+          } else if (
+            name.includes('font') ||
+            name.includes('letter') ||
+            name.includes('family')
+          ) {
+            category = 'font'
           } else if (
             value.includes('rem') ||
             value.includes('px') ||
@@ -172,17 +166,30 @@ export function analyzeFiles(files: UploadedFile[]): AnalysisResult {
             name.includes('inner')
           ) {
             category = 'size'
-          } else if (
-            name.includes('font') ||
-            name.includes('letter')
-          ) {
-            category = 'font'
           }
 
           result.cssVariables.push({ name, value, category })
         }
       }
     })
+
+  // 모든 컴포넌트를 개수가 많은 순서로 정렬
+  result.typographyInfo.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.buttons.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.forms.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.tables.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.boxes.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.helperBoxes.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.lists.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.stepLists.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.breadcrumbs.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.menus.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.leftMenus.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.tabs.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.paginations.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.modals.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.badges.sort((a, b) => (b.count || 0) - (a.count || 0))
+  result.extractedMarkup.accordions.sort((a, b) => (b.count || 0) - (a.count || 0))
 
   // 컴포넌트 분류
   categorizeComponents(result)
@@ -193,20 +200,54 @@ export function analyzeFiles(files: UploadedFile[]): AnalysisResult {
 function extractComponents(doc: Document, result: AnalysisResult): void {
   const markup = result.extractedMarkup
 
-  // 버튼 - button 태그는 클래스가 없어도 무조건 추출
+  // 버튼 - button 태그는 클래스가 없어도 무조건 추출 (개수 카운트)
+  // Swiper 관련 요소는 제외
+  const isSliderRelated = (el: Element): boolean => {
+    const className = (el as HTMLElement).className?.toLowerCase() || ''
+    if (className.includes('swiper') || className.includes('slick') || 
+        className.includes('owl-') || className.includes('bx-') || 
+        className.includes('splide')) {
+      return true
+    }
+    // 부모 요소 체크
+    let parent = el.parentElement
+    while (parent) {
+      const parentClass = parent.className?.toLowerCase() || ''
+      if (parentClass.includes('swiper') || parentClass.includes('slick') || 
+          parentClass.includes('owl-') || parentClass.includes('bx-') || 
+          parentClass.includes('splide')) {
+        return true
+      }
+      parent = parent.parentElement
+    }
+    return false
+  }
+  
   doc.querySelectorAll('button, .btn, [class*="btn-"]').forEach((el) => {
-    const html = el.outerHTML
     const element = el as HTMLElement
     const isButtonTag = el.tagName.toLowerCase() === 'button'
     const classKey = element.className || (isButtonTag ? 'button' : '')
     
+    // Swiper 관련 요소 제외
+    if (isSliderRelated(el)) {
+      return
+    }
+    
+    const html = cleanMarkup(el.outerHTML)
+    
     // button 태그는 클래스가 없어도 추출, 다른 요소는 클래스가 있어야 추출
-    if (!markup.buttons.find((b) => b.classes === classKey) && (isButtonTag || element.className)) {
-      markup.buttons.push({
-        classes: classKey,
-        html,
-        text: el.textContent?.trim().substring(0, 30) || '',
-      })
+    if (isButtonTag || element.className) {
+      const existing = markup.buttons.find((b) => b.classes === classKey)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else {
+        markup.buttons.push({
+          classes: classKey,
+          html,
+          text: el.textContent?.trim().substring(0, 30) || '',
+          count: 1,
+        })
+      }
     }
     result.buttons.push({
       classes: element.className,
@@ -214,12 +255,17 @@ function extractComponents(doc: Document, result: AnalysisResult): void {
     })
   })
 
-  // 폼
+  // 폼 (개수 카운트)
   doc.querySelectorAll('.form-group, .form-row, .form-item, .write-form').forEach((el) => {
     const element = el as HTMLElement
     const html = cleanMarkup(el.outerHTML)
-    if (!markup.forms.find((f) => f.classes === element.className) && html.length < 2000) {
-      markup.forms.push({ classes: element.className, html })
+    if (html.length < 2000) {
+      const existing = markup.forms.find((f) => f.classes === element.className)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else {
+        markup.forms.push({ classes: element.className, html, count: 1 })
+      }
     }
   })
 
@@ -253,104 +299,154 @@ function extractComponents(doc: Document, result: AnalysisResult): void {
     const element = el as HTMLElement
     result.tables.push(element.className)
 
-    if (markup.tables.length < 5) {
-      let targetEl: Element = el
-      const parent = el.parentElement
-      const grandparent = parent?.parentElement
-      
-      // 부모 또는 조부모가 테이블 래퍼인지 확인
-      if (grandparent && isTableWrapper(grandparent)) {
-        targetEl = grandparent
-      } else if (parent && isTableWrapper(parent)) {
-        targetEl = parent
-      }
+    let targetEl: Element = el
+    const parent = el.parentElement
+    const grandparent = parent?.parentElement
+    
+    // 부모 또는 조부모가 테이블 래퍼인지 확인
+    if (grandparent && isTableWrapper(grandparent)) {
+      targetEl = grandparent
+    } else if (parent && isTableWrapper(parent)) {
+      targetEl = parent
+    }
 
-      if (!extractedTableElements.has(targetEl)) {
+    const targetClass = (targetEl as HTMLElement).className || 'table'
+    const html = cleanMarkup(targetEl.outerHTML)
+    
+    if (html.length < 5000) {
+      const existing = markup.tables.find((t) => t.classes === targetClass)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else if (!extractedTableElements.has(targetEl)) {
         extractedTableElements.add(targetEl)
-        const html = cleanMarkup(targetEl.outerHTML)
-        if (html.length < 5000) {
-          markup.tables.push({
-            classes: (targetEl as HTMLElement).className || 'table',
-            html,
-          })
-        }
+        markup.tables.push({
+          classes: targetClass,
+          html,
+          count: 1,
+        })
       }
     }
   })
 
-  // 박스
+  // 박스 (개수 카운트)
   doc.querySelectorAll('.box, .box-wrap, .flex-box').forEach((el) => {
     const element = el as HTMLElement
     const html = cleanMarkup(el.outerHTML)
-    if (markup.boxes.length < 5 && html.length < 2000) {
-      markup.boxes.push({ classes: element.className, html })
+    if (html.length < 2000) {
+      const existing = markup.boxes.find((b) => b.classes === element.className)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else {
+        markup.boxes.push({ classes: element.className, html, count: 1 })
+      }
     }
   })
 
-  // 도움말 박스
+  // 도움말 박스 (개수 카운트)
   doc.querySelectorAll('.helper-box').forEach((el) => {
     const element = el as HTMLElement
     const html = cleanMarkup(el.outerHTML)
-    if (markup.helperBoxes.length < 3 && html.length < 2000) {
-      markup.helperBoxes.push({ classes: element.className, html })
+    if (html.length < 2000) {
+      const existing = markup.helperBoxes.find((b) => b.classes === element.className)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else {
+        markup.helperBoxes.push({ classes: element.className, html, count: 1 })
+      }
     }
   })
 
-  // 리스트
+  // 리스트 (개수 카운트)
   doc.querySelectorAll('.list-dot, .list-order, .list-dash, .list-sdot').forEach((el) => {
     const element = el as HTMLElement
     const html = cleanMarkup(el.outerHTML)
-    if (markup.lists.length < 5 && html.length < 1500) {
-      markup.lists.push({ classes: element.className, html })
+    if (html.length < 1500) {
+      const existing = markup.lists.find((l) => l.classes === element.className)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else {
+        markup.lists.push({ classes: element.className, html, count: 1 })
+      }
     }
   })
 
-  // 스텝 리스트
+  // 스텝 리스트 (개수 카운트)
   doc.querySelectorAll('.step-list, .list-procedure').forEach((el) => {
     const element = el as HTMLElement
     const html = cleanMarkup(el.outerHTML)
-    if (markup.stepLists.length < 2 && html.length < 3000) {
-      markup.stepLists.push({ classes: element.className, html })
+    if (html.length < 3000) {
+      const existing = markup.stepLists.find((l) => l.classes === element.className)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else {
+        markup.stepLists.push({ classes: element.className, html, count: 1 })
+      }
     }
   })
 
-  // 브레드크럼
+  // 브레드크럼 (개수 카운트)
   doc.querySelectorAll('.breadcrumb-wrap, .breadcrumb').forEach((el) => {
     const element = el as HTMLElement
     const html = cleanMarkup(el.outerHTML)
-    if (markup.breadcrumbs.length < 2) {
-      markup.breadcrumbs.push({ classes: element.className, html })
+    const existing = markup.breadcrumbs.find((b) => b.classes === element.className)
+    if (existing) {
+      existing.count = (existing.count || 1) + 1
+    } else {
+      markup.breadcrumbs.push({ classes: element.className, html, count: 1 })
     }
   })
 
-  // 메뉴
+  // 메뉴 (개수 카운트)
   doc.querySelectorAll('.topmenu, .head-gnb').forEach((el) => {
     const element = el as HTMLElement
     const html = cleanMarkup(el.outerHTML)
-    if (markup.menus.length < 2 && html.length < 5000) {
-      markup.menus.push({ classes: element.className, html })
+    if (html.length < 5000) {
+      const existing = markup.menus.find((m) => m.classes === element.className)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else {
+        markup.menus.push({ classes: element.className, html, count: 1 })
+      }
     }
   })
 
-  // 좌측 메뉴
+  // 좌측 메뉴 (개수 카운트)
   doc.querySelectorAll('.left-menu, #snb').forEach((el) => {
     const element = el as HTMLElement
     const html = cleanMarkup(el.outerHTML)
-    if (markup.leftMenus.length < 2 && html.length < 5000) {
-      markup.leftMenus.push({ classes: element.className, html })
+    if (html.length < 5000) {
+      const existing = markup.leftMenus.find((m) => m.classes === element.className)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else {
+        markup.leftMenus.push({ classes: element.className, html, count: 1 })
+      }
     }
   })
 
-  // 탭
-  doc.querySelectorAll('.tabs, .tab-conts-wrap').forEach((el) => {
+  // 탭 (개수 카운트) - 탭 요소만 정확히 추출
+  doc.querySelectorAll('.tabs, .tab-nav, .tab-conts-wrap, [role="tablist"]').forEach((el) => {
     const element = el as HTMLElement
+    const className = element.className
+    
+    // contents, section 같은 너무 큰 컨테이너는 제외
+    if (className.includes('contents') || className.includes('section') || className.includes('page-')) {
+      return
+    }
+    
     const html = cleanMarkup(el.outerHTML)
-    if (markup.tabs.length < 3 && html.length < 2000) {
-      markup.tabs.push({ classes: element.className, html })
+    // 탭 요소는 보통 작으므로 크기 제한을 더 줄임
+    if (html.length < 1500) {
+      const existing = markup.tabs.find((t) => t.classes === className)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else {
+        markup.tabs.push({ classes: className, html, count: 1 })
+      }
     }
   })
 
-  // 페이지네이션 - 감싸는 부모 태그까지 추출
+  // 페이지네이션 - 감싸는 부모 태그까지 추출 (개수 카운트)
   doc.querySelectorAll('.page-navi, .page-links, .paging, .pagination, [class*="paging"], [class*="pager"], [class*="_pager"], [class*="-pager"]').forEach((el) => {
     const element = el as HTMLElement
     
@@ -379,110 +475,112 @@ function extractComponents(doc: Document, result: AnalysisResult): void {
     }
     
     const html = cleanMarkup(targetEl.outerHTML)
+    const targetClass = (targetEl as HTMLElement).className || 'pagination'
+    
     // 이미 추출한 요소의 부모/자식이 아닌 경우에만 추가
     const isDuplicate = markup.paginations.some(p => 
       p.html.includes(html) || html.includes(p.html)
     )
     
-    if (markup.paginations.length < 3 && !isDuplicate && html.length < 3000) {
-      markup.paginations.push({ classes: (targetEl as HTMLElement).className || 'pagination', html })
+    if (html.length < 3000) {
+      const existing = markup.paginations.find((p) => p.classes === targetClass)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else if (!isDuplicate) {
+        markup.paginations.push({ classes: targetClass, html, count: 1 })
+      }
     }
   })
 
-  // 모달
+  // 모달 (개수 카운트)
   doc.querySelectorAll('.modal, .popup, [class*="layer"]').forEach((el) => {
     const element = el as HTMLElement
     const html = cleanMarkup(el.outerHTML)
-    if (markup.modals.length < 3 && html.length < 5000) {
-      markup.modals.push({ classes: element.className, html })
+    if (html.length < 5000) {
+      const existing = markup.modals.find((m) => m.classes === element.className)
+      if (existing) {
+        existing.count = (existing.count || 1) + 1
+      } else {
+        markup.modals.push({ classes: element.className, html, count: 1 })
+      }
     }
     result.modals.push(element.className)
   })
 
-  // 배지
+  // 배지 (개수 카운트)
   doc
     .querySelectorAll('.badge, [class*="badge"], .tag, [class*="state-"], [class*="status-"]')
     .forEach((el) => {
       const element = el as HTMLElement
       const html = cleanMarkup(el.outerHTML)
-      if (
-        !markup.badges.find((b) => b.classes === element.className) &&
-        markup.badges.length < 15 &&
-        html.length < 500
-      ) {
-        markup.badges.push({
-          classes: element.className,
-          html,
-          text: el.textContent?.trim().substring(0, 30) || '',
-        })
+      if (html.length < 500) {
+        const existing = markup.badges.find((b) => b.classes === element.className)
+        if (existing) {
+          existing.count = (existing.count || 1) + 1
+        } else {
+          markup.badges.push({
+            classes: element.className,
+            html,
+            text: el.textContent?.trim().substring(0, 30) || '',
+            count: 1,
+          })
+        }
       }
     })
 
-  // 아코디언
+  // 아코디언 (개수 카운트)
   doc
     .querySelectorAll('.accordion, [class*="accordion"], .collapse, .toggle-wrap, .aco-wrap')
     .forEach((el) => {
       const element = el as HTMLElement
       const html = cleanMarkup(el.outerHTML)
-      if (markup.accordions.length < 3 && html.length < 5000) {
-        markup.accordions.push({ classes: element.className, html })
+      if (html.length < 5000) {
+        const existing = markup.accordions.find((a) => a.classes === element.className)
+        if (existing) {
+          existing.count = (existing.count || 1) + 1
+        } else {
+          markup.accordions.push({ classes: element.className, html, count: 1 })
+        }
       }
     })
 
-  // 타이포그래피 - 클래스와 태그, ID 함께 추출
-  const typographySelectors = [
-    '[class*="title"]',
-    '[class*="tit-"]',
-    '[class*="heading"]',
-    '[class*="headline"]',
-    '[class*="subtitle"]',
-    '[class*="desc"]',
-    '[class*="text-"]',
-    'h1[class]', 'h2[class]', 'h3[class]', 'h4[class]', 'h5[class]', 'h6[class]',
-    // ID 기반 타이포그래피
-    '[id*="title"]',
-    '[id*="heading"]',
-    'h1[id]', 'h2[id]', 'h3[id]', 'h4[id]', 'h5[id]', 'h6[id]',
-  ]
-  doc.querySelectorAll(typographySelectors.join(', ')).forEach((el) => {
+  // 타이포그래피 - h1~h6 태그의 클래스 추출 (main 태그 우선, 없으면 .contents, 둘 다 없으면 전체)
+  // main 태그 또는 .contents 존재 여부 확인
+  const mainElement = doc.querySelector('main')
+  const contentsElement = doc.querySelector('.contents')
+  let typoSelector: string
+  if (mainElement) {
+    typoSelector = 'main h1[class], main h2[class], main h3[class], main h4[class], main h5[class], main h6[class]'
+  } else if (contentsElement) {
+    typoSelector = '.contents h1[class], .contents h2[class], .contents h3[class], .contents h4[class], .contents h5[class], .contents h6[class]'
+  } else {
+    typoSelector = 'h1[class], h2[class], h3[class], h4[class], h5[class], h6[class]'
+  }
+  
+  doc.querySelectorAll(typoSelector).forEach((el) => {
     const element = el as HTMLElement
     const tagName = el.tagName.toLowerCase()
     const classValue = element.className
-    const idValue = element.id
     
-    // 클래스가 있는 경우
     if (classValue) {
       classValue.split(' ').forEach((cls) => {
         cls = cls.trim()
-        if (cls && (cls.includes('title') || cls.includes('tit') || cls.includes('heading') || 
-            cls.includes('headline') || cls.includes('subtitle') || cls.includes('desc') || 
-            cls.includes('text-') || ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName))) {
-          if (!result.typographyInfo.find(t => t.className === cls)) {
+        // 클래스명에 'title' 또는 'tit'이 포함된 경우만 추출
+        if (cls && (cls.toLowerCase().includes('title') || cls.toLowerCase().includes('tit'))) {
+          // result.typographyInfo에서 기존 항목 찾기
+          const existing = result.typographyInfo.find(t => t.className === cls)
+          if (existing) {
+            existing.count = (existing.count || 0) + 1
+          } else {
             result.typographyInfo.push({
               className: cls,
               tagName: tagName,
               text: el.textContent?.trim().substring(0, 50) || '',
+              count: 1,
             })
           }
         }
       })
-    }
-    
-    // ID가 있고 클래스가 없는 경우 (ID 기반 타이포그래피)
-    if (idValue && !classValue) {
-      const idKey = `#${idValue}`
-      if (idValue.includes('title') || idValue.includes('heading') || 
-          ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
-        if (!result.typographyInfo.find(t => t.className === idKey)) {
-          result.typographyInfo.push({
-            className: idKey,
-            tagName: tagName,
-            text: el.textContent?.trim().substring(0, 50) || '',
-          })
-          // components.typography에도 추가
-          result.components.typography.push(idKey)
-        }
-      }
     }
   })
 
@@ -512,23 +610,9 @@ function extractComponents(doc: Document, result: AnalysisResult): void {
     }
   })
 
-  // role="tablist" -> 탭
+  // role="tablist" -> 탭 (컴포넌트 분류만, 마크업은 위에서 이미 추출됨)
   doc.querySelectorAll('[role="tablist"]').forEach((el) => {
     const element = el as HTMLElement
-    // 부모 컨테이너를 찾아서 탭 전체를 추출
-    let targetEl: Element = el
-    const parent = el.parentElement
-    if (parent && parent.tagName !== 'BODY') {
-      targetEl = parent
-    }
-    const html = cleanMarkup(targetEl.outerHTML)
-    if (markup.tabs.length < 3 && html.length < 3000) {
-      const existingClasses = markup.tabs.map(t => t.classes)
-      const targetClassName = (targetEl as HTMLElement).className
-      if (!existingClasses.includes(targetClassName)) {
-        markup.tabs.push({ classes: targetClassName || 'role-tablist', html })
-      }
-    }
     if (element.className) {
       result.components.tabs.push(element.className)
     }
@@ -550,10 +634,19 @@ function extractComponents(doc: Document, result: AnalysisResult): void {
     }
   })
 
-  // role="button" -> 버튼
+  // role="button" -> 버튼 (슬라이더 관련 제외)
   doc.querySelectorAll('[role="button"]').forEach((el) => {
     const element = el as HTMLElement
-    const html = el.outerHTML
+    const className = element.className?.toLowerCase() || ''
+    
+    // 슬라이더 관련 요소 제외
+    if (className.includes('swiper') || className.includes('slick') || 
+        className.includes('owl-') || className.includes('bx-') || 
+        className.includes('splide')) {
+      return
+    }
+    
+    const html = cleanMarkup(el.outerHTML)
     if (!markup.buttons.find((b) => b.classes === element.className) && element.className) {
       markup.buttons.push({
         classes: element.className,
@@ -592,16 +685,23 @@ function extractComponents(doc: Document, result: AnalysisResult): void {
 
   // ID 기반 추출 (gnb, snb, nav, menu는 제외)
 
-  // #tab 관련 ID
+  // #tab 관련 ID (큰 컨테이너 제외)
   doc.querySelectorAll('[id*="tab"]').forEach((el) => {
     const element = el as HTMLElement
     const idName = element.id
-    if (idName && !idName.includes('table')) {
+    const className = element.className || ''
+    
+    // table 포함, contents/section 같은 큰 컨테이너 제외
+    if (idName && !idName.includes('table') && 
+        !className.includes('contents') && !className.includes('section') && !className.includes('page-')) {
       const html = cleanMarkup(el.outerHTML)
-      if (markup.tabs.length < 3 && html.length < 3000) {
-        const existingClasses = markup.tabs.map(t => t.classes)
-        if (!existingClasses.includes(idName)) {
-          markup.tabs.push({ classes: `#${idName}`, html })
+      // 크기 제한 1500으로 줄임
+      if (html.length < 1500) {
+        const existing = markup.tabs.find(t => t.classes === `#${idName}`)
+        if (existing) {
+          existing.count = (existing.count || 1) + 1
+        } else {
+          markup.tabs.push({ classes: `#${idName}`, html, count: 1 })
         }
       }
       result.components.tabs.push(`#${idName}`)
@@ -679,8 +779,15 @@ function categorizeComponents(result: AnalysisResult): void {
   const ids = Array.from(result.ids).map(id => `#${id}`)
   const allIdentifiers = [...classes, ...ids]
   
+  // 슬라이더 관련 클래스 제외 함수
+  const isSliderClass = (c: string): boolean => {
+    const lower = c.toLowerCase()
+    return lower.includes('swiper') || lower.includes('slick') || 
+           lower.includes('owl-') || lower.includes('bx-') || lower.includes('splide')
+  }
+  
   result.components = {
-    buttons: classes.filter((c) => c.includes('btn') || c.includes('button')),
+    buttons: classes.filter((c) => (c.includes('btn') || c.includes('button')) && !isSliderClass(c)),
     forms: allIdentifiers.filter((c) => c.includes('form') || c.includes('input') || c.includes('select') || c.includes('search')),
     tables: classes.filter((c) => c.includes('table') || c.includes('tbl')),
     boxes: classes.filter((c) => c.includes('box') || c.includes('card')),
@@ -688,9 +795,7 @@ function categorizeComponents(result: AnalysisResult): void {
     modals: allIdentifiers.filter((c) => c.includes('modal') || c.includes('popup') || c.includes('layer') || c.includes('dialog')),
     tabs: allIdentifiers.filter((c) => (c.includes('tab') && !c.includes('table'))),
     pagination: allIdentifiers.filter((c) => c.includes('page') || c.includes('paging')),
-    typography: classes.filter(
-      (c) => c.includes('title') || c.includes('tit') || c.includes('heading')
-    ),
+    typography: result.typographyInfo.map(t => t.className),
     badges: classes.filter(
       (c) =>
         c.includes('badge') ||

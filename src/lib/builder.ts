@@ -138,10 +138,10 @@ export function buildStyleGuide(
     },
     // 6. 탭
     {
-      check: () => analysisResult.components.tabs.length > 0,
+      check: () => sectionOptions.tabs && (analysisResult.components.tabs.length > 0 || (additionalClasses?.tabs || '').length > 0),
       id: 'tabs',
       title: '탭',
-      build: (id, code) => buildTabSection(id, code, analysisResult),
+      build: (id, code, extra) => buildTabSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
     // 7. 테이블
     {
@@ -157,39 +157,35 @@ export function buildStyleGuide(
       title: '버튼',
       build: (id, code, extra) => buildButtonSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
-    // 9. 폼
+    // 9. 폼 요소
     {
       check: () => sectionOptions.forms && (analysisResult.components.forms.length > 0 || (additionalClasses?.forms || '').length > 0),
       id: 'forms',
       title: '폼 요소',
       build: (id, code, extra) => buildFormSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
-    // 10. 파비콘과 OG (HTML에 파비콘 또는 OG 메타태그가 있을 때만 표시)
-    {
-      check: () => sectionOptions.favicon && (analysisResult.hasFavicon || analysisResult.hasOG),
-      id: 'favicon',
-      title: '파비콘과 OG',
-      build: (id) => buildFaviconSection(id, analysisResult),
-    },
-    // 기타 섹션들
+    // 10. 박스/카드
     {
       check: () => sectionOptions.boxes && (analysisResult.components.boxes.length > 0 || (additionalClasses?.boxes || '').length > 0),
       id: 'boxes',
       title: '박스/카드',
       build: (id, code, extra) => buildBoxSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
+    // 11. 모달
     {
       check: () => sectionOptions.modal && (analysisResult.modals.length > 0 || (additionalClasses?.modal || '').length > 0),
       id: 'modal',
       title: '모달',
       build: (id, code, extra) => buildModalSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
+    // 12. 페이지네이션
     {
       check: () => sectionOptions.pagination && (analysisResult.components.pagination.length > 0 || (additionalClasses?.pagination || '').length > 0),
       id: 'pagination',
       title: '페이지네이션',
       build: (id, code, extra) => buildPaginationSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
     },
+    // 13. 아코디언
     {
       check: () =>
         sectionOptions.accordion &&
@@ -198,6 +194,13 @@ export function buildStyleGuide(
       id: 'accordions',
       title: '아코디언',
       build: (id, code, extra) => buildAccordionSection(id, code, analysisResult, parseAdditionalClasses(extra || '')),
+    },
+    // 14. 파비콘과 OG (맨 마지막, HTML에 파비콘 또는 OG 메타태그가 있을 때만 표시)
+    {
+      check: () => sectionOptions.favicon && (analysisResult.hasFavicon || analysisResult.hasOG),
+      id: 'favicon',
+      title: '파비콘과 OG',
+      build: (id) => buildFaviconSection(id, analysisResult),
     },
   ]
 
@@ -308,6 +311,35 @@ ${sections.join('\n\n')}
 </html>`
 }
 
+// 클래스 목록을 개수순으로 정렬하여 표시하는 helper 함수
+function buildSortedClassList(classes: string[], extractedItems: { classes: string; count?: number }[]): string {
+  if (classes.length === 0) return ''
+  
+  // 클래스별 개수 맵 생성
+  const countMap = new Map<string, number>()
+  extractedItems.forEach(item => {
+    if (item.count) {
+      countMap.set(item.classes, item.count)
+    }
+  })
+  
+  // 클래스를 개수 순으로 정렬
+  const sortedClasses = [...classes].sort((a, b) => {
+    const countA = countMap.get(a) || extractedItems.find(e => e.classes === a || e.classes.includes(a))?.count || 0
+    const countB = countMap.get(b) || extractedItems.find(e => e.classes === b || e.classes.includes(b))?.count || 0
+    return countB - countA
+  })
+  
+  // 클래스명에 개수 표시
+  const classListWithCount = sortedClasses.map(c => {
+    const count = countMap.get(c) || extractedItems.find(e => e.classes === c || e.classes.includes(c))?.count || 0
+    const displayName = c.startsWith('#') ? c : `.${c}`
+    return count > 0 ? `${displayName}(${count})` : displayName
+  }).join(', ')
+  
+  return `<p class="sg-section-class">${classListWithCount}</p>`
+}
+
 // 섹션 빌더들
 function buildButtonSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
   const buttonClasses = [...new Set([...result.components.buttons, ...extraClasses])].slice(0, 20)
@@ -325,14 +357,15 @@ function buildButtonSection(id: number, includeCode: boolean, result: AnalysisRe
       ? extracted.map((btn) => btn.html).join('\n\n') + (extraButtons ? '\n\n<!-- 추가 클래스 -->\n' + extraButtons : '')
       : buttonClasses.map((cls) => `<button class="${cls}">버튼</button>`).join('\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
-  const classListHtml = buttonClasses.length > 0 ? `<p class="sg-section-class">${buttonClasses.map(c => `.${c}`).join(', ')}</p>` : ''
+  const classListHtml = buildSortedClassList(buttonClasses, result.extractedMarkup.buttons)
   return `<section class="sg-section" id="buttons"><h2 class="sg-title">${id}. 버튼</h2>${classListHtml}<div class="sg-preview sg-button-grid">${previewHtml}</div>${codeBlock}</section>`
 }
 
 function buildFormSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
   const formClasses = [...new Set([...result.components.forms, ...extraClasses])].slice(0, 20)
+  const allForms = result.extractedMarkup.forms
   const seenClasses = new Set<string>()
-  const extracted = result.extractedMarkup.forms.filter((f) => {
+  const extracted = allForms.filter((f) => {
     if (seenClasses.has(f.classes)) return false
     seenClasses.add(f.classes)
     return true
@@ -344,7 +377,7 @@ function buildFormSection(id: number, includeCode: boolean, result: AnalysisResu
       : extraFormsHtml
   const codeHtml = extracted.map((f) => f.html).join('\n\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
-  const classListHtml = formClasses.length > 0 ? `<p class="sg-section-class">${formClasses.map(c => `.${c}`).join(', ')}</p>` : ''
+  const classListHtml = buildSortedClassList(formClasses, allForms)
   return `<section class="sg-section" id="forms"><h2 class="sg-title">${id}. 폼 요소</h2>${classListHtml}<div class="sg-preview">${previewHtml}</div>${codeBlock}</section>`
 }
 
@@ -383,14 +416,24 @@ function buildTypographySection(id: number, includeCode: boolean, result: Analys
   }).join('')
   
   const codeBlock = buildCodeBlock(headingExamples, includeCode)
-  const classListHtml = typoClasses.length > 0 ? `<p class="sg-section-class">${typoClasses.map(c => c.startsWith('#') ? c : `.${c}`).join(', ')}</p>` : ''
+  
+  // 클래스명과 개수 함께 표시
+  const classListWithCount = typoClasses.map(c => {
+    const info = result.typographyInfo.find(t => t.className === c)
+    const count = info?.count || 0
+    const displayName = c.startsWith('#') ? c : `.${c}`
+    return count > 0 ? `${displayName}(${count})` : displayName
+  }).join(', ')
+  
+  const classListHtml = typoClasses.length > 0 ? `<p class="sg-section-class">${classListWithCount}</p>` : ''
   return `<section class="sg-section" id="typography"><h2 class="sg-title">${id}. 타이포그래피</h2>${classListHtml}<div class="sg-preview">${headingExamples}</div>${codeBlock}</section>`
 }
 
 function buildBoxSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
   const boxClasses = [...new Set([...result.components.boxes, ...extraClasses])].slice(0, 15)
+  const allBoxes = result.extractedMarkup.boxes
   const seenClasses = new Set<string>()
-  const extracted = result.extractedMarkup.boxes.filter((b) => {
+  const extracted = allBoxes.filter((b) => {
     if (seenClasses.has(b.classes)) return false
     seenClasses.add(b.classes)
     return true
@@ -402,15 +445,16 @@ function buildBoxSection(id: number, includeCode: boolean, result: AnalysisResul
       : extraBoxesHtml
   const codeHtml = extracted.map((b) => b.html).join('\n\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
-  const classListHtml = boxClasses.length > 0 ? `<p class="sg-section-class">${boxClasses.map(c => `.${c}`).join(', ')}</p>` : ''
+  const classListHtml = buildSortedClassList(boxClasses, allBoxes)
   return `<section class="sg-section" id="boxes"><h2 class="sg-title">${id}. 박스/카드</h2>${classListHtml}<div class="sg-preview">${previewHtml}</div>${codeBlock}</section>`
 }
 
 function buildListSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
   const listClasses = [...new Set([...result.components.lists, ...extraClasses])].slice(0, 15)
+  const allLists = result.extractedMarkup.lists
   // 같은 클래스를 가진 항목은 하나만 출력 (중복 제거)
   const seenClasses = new Set<string>()
-  const extracted = result.extractedMarkup.lists.filter((l) => {
+  const extracted = allLists.filter((l) => {
     if (seenClasses.has(l.classes)) return false
     seenClasses.add(l.classes)
     return true
@@ -422,15 +466,16 @@ function buildListSection(id: number, includeCode: boolean, result: AnalysisResu
       : extraListsHtml
   const codeHtml = extracted.map((l) => l.html).join('\n\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
-  const classListHtml = listClasses.length > 0 ? `<p class="sg-section-class">${listClasses.map(c => `.${c}`).join(', ')}</p>` : ''
+  const classListHtml = buildSortedClassList(listClasses, allLists)
   return `<section class="sg-section" id="lists"><h2 class="sg-title">${id}. 리스트</h2>${classListHtml}<div class="sg-preview">${previewHtml}</div>${codeBlock}</section>`
 }
 
 
 function buildTableSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
   const tableClasses = [...new Set([...result.tables.filter((c) => c), ...extraClasses])].slice(0, 10)
+  const allTables = result.extractedMarkup.tables
   const seenClasses = new Set<string>()
-  const extracted = result.extractedMarkup.tables.filter((t) => {
+  const extracted = allTables.filter((t) => {
     if (seenClasses.has(t.classes)) return false
     seenClasses.add(t.classes)
     return true
@@ -442,14 +487,15 @@ function buildTableSection(id: number, includeCode: boolean, result: AnalysisRes
       : extraTablesHtml
   const codeHtml = extracted.map((t) => t.html).join('\n\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
-  const classListHtml = tableClasses.length > 0 ? `<p class="sg-section-class">${tableClasses.map(c => `.${c}`).join(', ')}</p>` : ''
+  const classListHtml = buildSortedClassList(tableClasses, allTables)
   return `<section class="sg-section" id="tables"><h2 class="sg-title">${id}. 테이블</h2>${classListHtml}<div class="sg-preview sg-table-preview">${previewHtml}</div>${codeBlock}</section>`
 }
 
 function buildModalSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
   const modalClasses = [...new Set([...result.modals.filter((c) => c), ...extraClasses])].slice(0, 10)
+  const allModals = result.extractedMarkup.modals
   const seenClasses = new Set<string>()
-  const extracted = result.extractedMarkup.modals.filter((m) => {
+  const extracted = allModals.filter((m) => {
     if (seenClasses.has(m.classes)) return false
     seenClasses.add(m.classes)
     return true
@@ -461,7 +507,7 @@ function buildModalSection(id: number, includeCode: boolean, result: AnalysisRes
       : extraModalsHtml
   const codeHtml = extracted.map((m) => m.html).join('\n\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
-  const classListHtml = modalClasses.length > 0 ? `<p class="sg-section-class">${modalClasses.map(c => `.${c}`).join(', ')}</p>` : ''
+  const classListHtml = buildSortedClassList(modalClasses, allModals)
   return `<section class="sg-section" id="modal"><h2 class="sg-title">${id}. 모달</h2>${classListHtml}<div class="sg-preview">${previewHtml}</div>${codeBlock}</section>`
 }
 
@@ -576,28 +622,31 @@ function buildColorSection(id: number, result: AnalysisResult): string {
   </section>`
 }
 
-function buildTabSection(id: number, includeCode: boolean, result: AnalysisResult): string {
-  const tabClasses = [...new Set(result.components.tabs)].slice(0, 15)
+function buildTabSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
+  const tabClasses = [...new Set([...result.components.tabs, ...extraClasses])].slice(0, 15)
+  const allTabs = result.extractedMarkup.tabs
   const seenClasses = new Set<string>()
-  const extracted = result.extractedMarkup.tabs.filter((t) => {
+  const extracted = allTabs.filter((t) => {
     if (seenClasses.has(t.classes)) return false
     seenClasses.add(t.classes)
     return true
   }).slice(0, 3)
+  const extraTabsHtml = extraClasses.map(cls => `<div class="sg-extracted-item"><div class="${cls}" role="tablist">탭 (.${cls})</div></div>`).join('')
   const previewHtml =
     extracted.length > 0
-      ? extracted.map((t) => `<div class="sg-extracted-item">${t.html}</div>`).join('')
-      : ''
+      ? extracted.map((t) => `<div class="sg-extracted-item">${t.html}</div>`).join('') + extraTabsHtml
+      : extraTabsHtml
   const codeHtml = extracted.map((t) => t.html).join('\n\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
-  const classListHtml = tabClasses.length > 0 ? `<p class="sg-section-class">${tabClasses.map(c => `.${c}`).join(', ')}</p>` : ''
+  const classListHtml = buildSortedClassList(tabClasses, allTabs)
   return `<section class="sg-section" id="tabs"><h2 class="sg-title">${id}. 탭</h2>${classListHtml}<div class="sg-preview">${previewHtml}</div>${codeBlock}</section>`
 }
 
 function buildPaginationSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
   const pageClasses = [...new Set([...result.components.pagination, ...extraClasses])].slice(0, 15)
+  const allPaginations = result.extractedMarkup.paginations
   const seenClasses = new Set<string>()
-  const extracted = result.extractedMarkup.paginations.filter((p) => {
+  const extracted = allPaginations.filter((p) => {
     if (seenClasses.has(p.classes)) return false
     seenClasses.add(p.classes)
     return true
@@ -609,14 +658,15 @@ function buildPaginationSection(id: number, includeCode: boolean, result: Analys
       : extraPaginationsHtml
   const codeHtml = extracted.map((p) => p.html).join('\n\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
-  const classListHtml = pageClasses.length > 0 ? `<p class="sg-section-class">${pageClasses.map(c => `.${c}`).join(', ')}</p>` : ''
+  const classListHtml = buildSortedClassList(pageClasses, allPaginations)
   return `<section class="sg-section" id="pagination"><h2 class="sg-title">${id}. 페이지네이션</h2>${classListHtml}<div class="sg-preview">${previewHtml}</div>${codeBlock}</section>`
 }
 
 function buildBadgeSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
   const badgeClasses = [...new Set([...result.components.badges, ...extraClasses])].slice(0, 20)
+  const allBadges = result.extractedMarkup.badges
   const seenClasses = new Set<string>()
-  const extracted = result.extractedMarkup.badges.filter((b) => {
+  const extracted = allBadges.filter((b) => {
     if (seenClasses.has(b.classes)) return false
     seenClasses.add(b.classes)
     return true
@@ -628,14 +678,15 @@ function buildBadgeSection(id: number, includeCode: boolean, result: AnalysisRes
       : ''
   const codeHtml = extracted.map((b) => b.html).join('\n\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
-  const classListHtml = badgeClasses.length > 0 ? `<p class="sg-section-class">${badgeClasses.map(c => `.${c}`).join(', ')}</p>` : ''
+  const classListHtml = buildSortedClassList(badgeClasses, allBadges)
   return `<section class="sg-section" id="badges"><h2 class="sg-title">${id}. 배지</h2>${classListHtml}<div class="sg-preview">${previewHtml}</div>${codeBlock}</section>`
 }
 
 function buildAccordionSection(id: number, includeCode: boolean, result: AnalysisResult, extraClasses: string[] = []): string {
   const accordionClasses = [...new Set([...result.components.accordions, ...extraClasses])].slice(0, 20)
+  const allAccordions = result.extractedMarkup.accordions
   const seenClasses = new Set<string>()
-  const extracted = result.extractedMarkup.accordions.filter((a) => {
+  const extracted = allAccordions.filter((a) => {
     if (seenClasses.has(a.classes)) return false
     seenClasses.add(a.classes)
     return true
@@ -647,7 +698,7 @@ function buildAccordionSection(id: number, includeCode: boolean, result: Analysi
       : extraAccordionsHtml
   const codeHtml = extracted.map((a) => a.html).join('\n\n')
   const codeBlock = buildCodeBlock(codeHtml, includeCode)
-  const classListHtml = accordionClasses.length > 0 ? `<p class="sg-section-class">${accordionClasses.map(c => `.${c}`).join(', ')}</p>` : ''
+  const classListHtml = buildSortedClassList(accordionClasses, allAccordions)
   return `<section class="sg-section" id="accordions"><h2 class="sg-title">${id}. 아코디언</h2>${classListHtml}<div class="sg-preview">${previewHtml}</div>${codeBlock}</section>`
 }
 
@@ -655,91 +706,41 @@ function buildFaviconSection(id: number, result: AnalysisResult): string {
   let html = `<section class="sg-section" id="favicon">
     <h2 class="sg-title">${id}. 파비콘과 OG</h2>
     <style>
-      .sg-meta-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
-      .sg-meta-table th, .sg-meta-table td { padding: 12px 15px; text-align: left; border: 1px solid #E5E8EB; }
-      .sg-meta-table th { background: #F9FAFB; font-weight: 600; color: #374151; }
-      .sg-meta-table tr:hover td { background: #F9FAFB; }
-      .sg-favicon-preview { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px; }
-      .sg-favicon-item { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 15px; background: #F9FAFB; border-radius: 8px; min-width: 100px; }
-      .sg-favicon-item img { max-width: 64px; max-height: 64px; image-rendering: pixelated; }
-      .sg-favicon-item span { font-size: 12px; color: #6B7280; text-align: center; word-break: break-all; }
-      .sg-og-image { max-width: 100%; max-height: 300px; border-radius: 8px; margin-top: 15px; border: 1px solid #E5E8EB; }
+      .sg-url-list { list-style: none; padding: 0; margin: 0; }
+      .sg-url-list li { padding: 10px 15px; background: #F9FAFB; border-radius: 6px; margin-bottom: 8px; font-size: 14px; color: #374151; word-break: break-all; }
+      .sg-url-list li:last-child { margin-bottom: 0; }
     </style>`
 
-  // 파비콘 섹션
+  // 파비콘 섹션 - 주소만 텍스트로 표시
   if (result.favicons.length > 0) {
     html += `
     <h3 class="sg-subtitle">파비콘 (Favicon)</h3>
     <div class="sg-preview">
-      <div class="sg-favicon-preview">`
-    
-    result.favicons.forEach(favicon => {
-      const fileName = favicon.href.split('/').pop() || favicon.href
-      html += `
-        <div class="sg-favicon-item">
-          <img src="${escapeHtml(favicon.href)}" alt="favicon" onerror="this.style.display='none'"/>
-          <span>${escapeHtml(fileName)}</span>
-          ${favicon.sizes ? `<span>${favicon.sizes}</span>` : ''}
-        </div>`
-    })
-    
-    html += `
-      </div>
-      <table class="sg-meta-table" style="margin-top: 20px;">
-        <thead>
-          <tr><th>rel</th><th>href</th><th>sizes</th><th>type</th></tr>
-        </thead>
-        <tbody>`
+      <ul class="sg-url-list">`
     
     result.favicons.forEach(favicon => {
       html += `
-          <tr>
-            <td>${escapeHtml(favicon.rel)}</td>
-            <td>${escapeHtml(favicon.href)}</td>
-            <td>${favicon.sizes ? escapeHtml(favicon.sizes) : '-'}</td>
-            <td>${favicon.type ? escapeHtml(favicon.type) : '-'}</td>
-          </tr>`
+        <li>${escapeHtml(favicon.href)}</li>`
     })
     
     html += `
-        </tbody>
-      </table>
+      </ul>
     </div>`
   }
 
-  // OG 메타태그 섹션
+  // OG 이미지 섹션 - 주소만 텍스트로 표시
   if (result.ogTags.length > 0) {
     const ogImage = result.ogTags.find(t => t.property === 'og:image')
     
-    html += `
-    <h3 class="sg-subtitle">Open Graph (OG) 메타태그</h3>
-    <div class="sg-preview">`
-    
-    // OG 이미지가 있으면 미리보기 표시
     if (ogImage) {
       html += `
-      <img class="sg-og-image" src="${escapeHtml(ogImage.content)}" alt="OG Image" onerror="this.style.display='none'"/>`
-    }
-    
-    html += `
-      <table class="sg-meta-table">
-        <thead>
-          <tr><th>속성</th><th>값</th></tr>
-        </thead>
-        <tbody>`
-    
-    result.ogTags.forEach(tag => {
-      html += `
-          <tr>
-            <td>${escapeHtml(tag.property)}</td>
-            <td>${escapeHtml(tag.content)}</td>
-          </tr>`
-    })
-    
-    html += `
-        </tbody>
-      </table>
+    <h3 class="sg-subtitle">Open Graph (OG) 이미지</h3>
+    <div class="sg-preview">
+      <ul class="sg-url-list">
+        <li>${escapeHtml(ogImage.content)}</li>
+      </ul>
     </div>`
+    }
   }
 
   html += `
