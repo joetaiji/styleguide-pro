@@ -758,7 +758,7 @@ function extractComponents(doc: Document, result: AnalysisResult): void {
   })
 
   // #form 관련 ID
-  doc.querySelectorAll('form[id], [id*="form"], [id*="search"]').forEach((el) => {
+  doc.querySelectorAll('form[id], [id*="form"]').forEach((el) => {
     const element = el as HTMLElement
     const idName = element.id
     if (idName) {
@@ -788,7 +788,7 @@ function categorizeComponents(result: AnalysisResult): void {
   
   result.components = {
     buttons: classes.filter((c) => (c.includes('btn') || c.includes('button')) && !isSliderClass(c)),
-    forms: allIdentifiers.filter((c) => c.includes('form') || c.includes('input') || c.includes('select') || c.includes('search')),
+    forms: allIdentifiers.filter((c) => c.includes('form') || c.includes('input') || c.includes('select')),
     tables: classes.filter((c) => c.includes('table') || c.includes('tbl')),
     boxes: classes.filter((c) => c.includes('box') || c.includes('card')),
     lists: allIdentifiers.filter((c) => c.includes('list')),

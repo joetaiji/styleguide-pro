@@ -479,9 +479,9 @@ export default function Home() {
       <main className="flex-1 w-full">
         {/* 업로드 탭 - 2컬럼 레이아웃 */}
         {activeTab === 'upload' && (
-          <div className="flex gap-0 h-full">
+          <div className="flex gap-0 min-h-[calc(100vh-64px)]">
             {/* 왼쪽: 설정 패널 */}
-            <div className="w-80 flex-shrink-0 bg-white border-r border-gray-200 p-6 overflow-y-auto h-[calc(100vh-64px)]">
+            <div className="w-80 flex-shrink-0 bg-white border-r border-gray-200 p-6 overflow-y-auto">
               <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2"><Settings size={18} /> 생성 설정</h2>
               
               {/* 포함할 섹션 */}
@@ -647,7 +647,7 @@ export default function Home() {
                 />
               </div>
 
-              {/* URL 입력 */}
+              {/* URL 입력 - 추후 업그레이드 예정
               <div className="mt-6">
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex-1 h-px bg-gray-200"></div>
@@ -687,6 +687,7 @@ export default function Home() {
                 </div>
                 <p className="text-xs text-gray-400 mt-2">웹사이트 URL을 입력하면 메인 페이지와 서브페이지의 HTML, CSS 파일을 자동으로 추출합니다.</p>
               </div>
+              */}
 
               {/* 파일 목록 */}
               {files.length > 0 && (
